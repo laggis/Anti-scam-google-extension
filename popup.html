@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Link Blocker</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+  <style>
+    body {
+      width: 300px;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      margin: 0;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .header-icon {
+      font-size: 24px;
+    }
+    h2 {
+      margin: 0;
+      font-size: 18px;
+      color: #1a1a1a;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+    input[type="text"]:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+    }
+    button {
+      background-color: #2563eb;
+      color: white;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background-color 0.2s;
+    }
+    button:hover {
+      background-color: #1d4ed8;
+    }
+    #blockedList {
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 8px;
+    }
+    .blocked-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .blocked-item:last-child {
+      border-bottom: none;
+    }
+    .remove-btn {
+      background-color: #dc2626;
+      padding: 4px 8px;
+      font-size: 12px;
+    }
+    .remove-btn:hover {
+      background-color: #b91c1c;
+    }
+    #testResults {
+      margin-top: 16px;
+      padding: 8px;
+      border-radius: 4px;
+      display: none;
+    }
+    #testResults.success {
+      background-color: #dcfce7;
+      color: #166534;
+      border: 1px solid #bbf7d0;
+    }
+    #testResults.error {
+      background-color: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #fecaca;
+    }
+    .api-status {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px;
+      border: 1px solid #e5e7eb;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+    .status-indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-left: 8px;
+    }
+    .status-indicator.unknown {
+      background-color: #9ca3af;
+    }
+    .status-indicator.working {
+      background-color: #22c55e;
+    }
+    .status-indicator.error {
+      background-color: #ef4444;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <span class="header-icon">🛡️</span>
+      <h2>Link Blocker</h2>
+    </div>
+    <div>
+      <h3>API Status</h3>
+      <div class="api-status">
+        <span>URLhaus API</span>
+        <div>
+          <span id="urlhausStatus">Unknown</span>
+          <span class="status-indicator unknown" id="urlhausIndicator"></span>
+        </div>
+      </div>
+      <button id="testApi">Test URLhaus API</button>
+      <div id="testResults"></div>
+    </div>
+    <div>
+      <input type="text" id="blockUrl" placeholder="Enter URL to block (e.g., example.com)">
+      <button id="addUrl">Add to Blocklist</button>
+    </div>
+    <div id="blockedList">
+      <h3>Blocked URLs:</h3>
+      <!-- Blocked URLs will be listed here -->
+    </div>
+  </div>
+  <script src="config.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

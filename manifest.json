@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Link Blocker",
+  "version": "1.0",
+  "description": "Blocks malicious and unwanted links",
+  "permissions": [
+    "storage",
+    "webNavigation",
+    "tabs"
+  ],
+  "host_permissions": [
+    "*://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png"
+  },
+  "web_accessible_resources": [{
+    "resources": ["warning.html", "warning.js"],
+    "matches": ["<all_urls>"]
+  }]
+}
