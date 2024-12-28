@@ -3,6 +3,8 @@ const CONFIG = {
     SAFE_BROWSING_API_KEY: 'AIzaSyB6ZjzqtDIbH857nRboO2t8p0_qZIw9xi4',
     URLHAUS_API: 'https://urlhaus-api.abuse.ch/v1/url/',
     GITHUB_URLS: [
+        'https://raw.githubusercontent.com/blocklistproject/Lists/master/fraud.txt',
+        'https://raw.githubusercontent.com/durablenapkin/scamblocklist/master/hosts.txt',
         'https://raw.githubusercontent.com/laggis/Dns/main/flagged_urls.json'
     ]
 };
@@ -53,71 +55,90 @@ async function initializeStorage() {
 
 // Function to clean URL
 function cleanUrl(url) {
-    // Remove protocol
-    url = url.replace(/^https?:\/\//, '');
-    // Remove paths, query parameters, and hashes
-    url = url.split('/')[0].split('?')[0].split('#')[0];
-    // Remove www and any other common subdomains
-    url = url.replace(/^(www\.|ww\.|w\.|m\.)/, '');
-    // Remove trailing dots and spaces
-    url = url.trim().replace(/\.+$/, '');
-    return url.toLowerCase();
+    try {
+        // Remove protocol
+        url = url.replace(/^https?:\/\//, '');
+        // Remove paths, query parameters, and hashes
+        url = url.split('/')[0].split('?')[0].split('#')[0];
+        // Remove www and any other common subdomains
+        url = url.replace(/^(www\.|ww\.|w\.|m\.)/, '');
+        // Remove trailing dots and spaces
+        url = url.trim().replace(/\.+$/, '');
+        return url.toLowerCase();
+    } catch (error) {
+        console.error('Error cleaning URL:', error);
+        return '';
+    }
 }
 
 // Update blocklist from GitHub
 async function updateBlocklistFromGitHub() {
     try {
         const blockedUrls = new Set();
+        console.log('Starting GitHub blocklist update...');
         
         // Fetch and parse each blocklist
         for (const url of CONFIG.GITHUB_URLS) {
             try {
+                console.log(`Fetching blocklist from: ${url}`);
                 const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
                 const text = await response.text();
                 
                 // Parse different formats (JSON, text, hosts file)
                 if (url.endsWith('.json')) {
                     const json = JSON.parse(text);
-                    json.urls?.forEach(u => {
-                        const cleanedUrl = cleanUrl(u);
-                        if (!SAFE_DOMAINS.has(cleanedUrl)) {
-                            blockedUrls.add(cleanedUrl);
-                        }
-                    });
-                } else {
-                    // Parse line by line for text/hosts files
-                    text.split('\n')
-                        .map(line => line.trim())
-                        .filter(line => line && !line.startsWith('#'))
-                        .forEach(line => {
-                            const match = line.match(/\b((?:[a-z][\w-]+:(?:\/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}\/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'".,<>?«»""'']))/i);
-                            if (match) {
-                                const cleanedUrl = cleanUrl(match[0]);
-                                if (!SAFE_DOMAINS.has(cleanedUrl)) {
-                                    blockedUrls.add(cleanedUrl);
-                                }
+                    if (json.urls && Array.isArray(json.urls)) {
+                        console.log(`Found ${json.urls.length} URLs in JSON file`);
+                        json.urls.forEach(u => {
+                            const cleanedUrl = cleanUrl(u);
+                            if (cleanedUrl && !SAFE_DOMAINS.has(cleanedUrl)) {
+                                blockedUrls.add(cleanedUrl);
                             }
                         });
+                    }
+                } else {
+                    // Parse line by line for text/hosts files
+                    const lines = text.split('\n')
+                        .map(line => line.trim())
+                        .filter(line => line && !line.startsWith('#'));
+                    
+                    console.log(`Found ${lines.length} lines in text file`);
+                    lines.forEach(line => {
+                        // Match domain in hosts file format or URL format
+                        const match = line.match(/(?:^(?:\d{1,3}\.){3}\d{1,3}\s+([^\s]+)|^([a-z0-9][a-z0-9.-]*\.[a-z]{2,})$)/i);
+                        if (match) {
+                            const domain = match[1] || match[2];
+                            const cleanedUrl = cleanUrl(domain);
+                            if (cleanedUrl && !SAFE_DOMAINS.has(cleanedUrl)) {
+                                blockedUrls.add(cleanedUrl);
+                            }
+                        }
+                    });
                 }
             } catch (error) {
                 console.error(`Error fetching blocklist ${url}:`, error);
             }
         }
         
-        // Store updated blocklist
-        const blockedUrlsArray = Array.from(blockedUrls);
-        console.log('Blocked URLs before safe domain filter:', blockedUrlsArray.length);
+        // Log statistics
+        console.log('Blocked URLs before safe domain filter:', blockedUrls.size);
         
-        // Final safety check to ensure no safe domains are in the blocklist
+        // Convert to array and apply final safety check
+        const blockedUrlsArray = Array.from(blockedUrls);
         const finalBlocklist = blockedUrlsArray.filter(url => !SAFE_DOMAINS.has(url));
+        
         console.log('Blocked URLs after safe domain filter:', finalBlocklist.length);
         
+        // Store updated blocklist
         await chrome.storage.local.set({ 
             blockedUrls: finalBlocklist,
             lastUpdate: Date.now()
         });
         
-        console.log('Updated blocklist from GitHub, total URLs:', finalBlocklist.length);
+        console.log('Successfully updated blocklist from GitHub');
     } catch (error) {
         console.error('Failed to update from GitHub:', error);
     }
@@ -130,11 +151,18 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 chrome.action.setBadgeBackgroundColor({ color: '#dc2626' });
 chrome.action.setBadgeText({ text: 'LB' });
 
-// Initialize storage with default blocked domains and fetch from GitHub
-chrome.runtime.onInstalled.addListener(async function() {
-  await initializeStorage();
-  await updateBlocklistFromGitHub();
-  setInterval(updateBlocklistFromGitHub, 24 * 60 * 60 * 1000); // Update daily
+// Initialize storage and update blocklist
+chrome.runtime.onInstalled.addListener(async () => {
+    console.log('Extension installed/updated');
+    await initializeStorage();
+    await updateBlocklistFromGitHub();
+    setInterval(updateBlocklistFromGitHub, 24 * 60 * 60 * 1000); // Update daily
+});
+
+// Also update when extension starts
+chrome.runtime.onStartup.addListener(async () => {
+    console.log('Extension started');
+    await updateBlocklistFromGitHub();
 });
 
 // Check URL with Safe Browsing API
