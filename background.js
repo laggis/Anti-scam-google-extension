@@ -249,57 +249,81 @@ async function checkUrlWithUrlhaus(url) {
 
 // Listen for web navigation events
 chrome.webNavigation.onBeforeNavigate.addListener(async function(details) {
-  if (details.frameId === 0) { // Only check main frame navigation
-    try {
-      const url = new URL(details.url);
-      const hostname = cleanUrl(url.hostname);
-      
-      console.log('Checking URL:', hostname); // Debug log
-      
-      // Get blocked URLs from local storage
-      const result = await chrome.storage.local.get('blockedUrls');
-      const blockedUrls = result.blockedUrls || [];
-      
-      console.log('Blocked URLs:', blockedUrls); // Debug log
-      
-      // More precise URL matching
-      const isLocallyBlocked = blockedUrls.some(blockedUrl => {
-        const cleanBlockedUrl = cleanUrl(blockedUrl);
-        const isBlocked = hostname === cleanBlockedUrl || hostname.endsWith('.' + cleanBlockedUrl);
-        if (isBlocked) {
-          console.log('URL blocked by local list:', cleanBlockedUrl); // Debug log
+    if (details.frameId === 0) { // Only check main frame navigation
+        try {
+            const url = details.url;
+            console.log('Checking URL:', url);
+            
+            // Get the cleaned URL for checking
+            const cleanedUrl = cleanUrl(url);
+            console.log('Cleaned URL:', cleanedUrl);
+
+            // Skip safe domains
+            if (SAFE_DOMAINS.has(cleanedUrl)) {
+                console.log('URL is in safe domains list, allowing access');
+                return;
+            }
+
+            // Check local blocklist first
+            const result = await chrome.storage.local.get('blockedUrls');
+            const blockedUrls = result.blockedUrls || [];
+            console.log('Current blocklist size:', blockedUrls.length);
+
+            // Check if URL or its domain is in blocklist
+            const isBlocked = blockedUrls.some(blockedUrl => {
+                const cleanedBlockedUrl = cleanUrl(blockedUrl);
+                return cleanedUrl === cleanedBlockedUrl || cleanedUrl.endsWith('.' + cleanedBlockedUrl);
+            });
+
+            if (isBlocked) {
+                console.log('URL is in local blocklist, blocking access');
+                chrome.tabs.update(details.tabId, {
+                    url: chrome.runtime.getURL('warning.html') + 
+                         '?url=' + encodeURIComponent(url) + 
+                         '&reason=' + encodeURIComponent('Matched local blocklist')
+                });
+                return;
+            }
+
+            // Check URLhaus API
+            const urlhausResult = await checkUrlWithUrlhaus(url);
+            if (!urlhausResult.isSafe) {
+                console.log('URL is flagged by URLhaus, blocking access');
+                chrome.tabs.update(details.tabId, {
+                    url: chrome.runtime.getURL('warning.html') + 
+                         '?url=' + encodeURIComponent(url) + 
+                         '&reason=' + encodeURIComponent('Flagged by URLhaus API')
+                });
+                return;
+            }
+
+            // Check Google Safe Browsing API
+            const safeBrowsingResult = await checkUrlWithSafeBrowsing(url);
+            if (!safeBrowsingResult) {
+                console.log('URL is flagged by Safe Browsing API, blocking access');
+                chrome.tabs.update(details.tabId, {
+                    url: chrome.runtime.getURL('warning.html') + 
+                         '?url=' + encodeURIComponent(url) + 
+                         '&reason=' + encodeURIComponent('Flagged by Google Safe Browsing API')
+                });
+                return;
+            }
+
+            console.log('URL passed all checks, allowing access');
+        } catch (error) {
+            console.error('Error checking URL:', error);
         }
-        return isBlocked;
-      });
-
-      // Check with both APIs in parallel
-      console.log('Checking APIs...'); // Debug log
-      const [isSafe, isUrlhausSafe] = await Promise.all([
-        checkUrlWithSafeBrowsing(details.url),
-        checkUrlWithUrlhaus(details.url).then(isBlocked => !isBlocked)
-      ]);
-      
-      console.log('API Results - Safe Browsing:', isSafe, 'URLhaus:', isUrlhausSafe); // Debug log
-
-      if (isLocallyBlocked || !isSafe || !isUrlhausSafe) {
-        let reason = isLocallyBlocked ? 'Matched local blocklist' :
-                    !isSafe ? 'Flagged by Google Safe Browsing' :
-                    'Flagged by URLhaus';
-
-        console.log('Blocking reason:', reason); // Debug log
-
-        // Get extension URL for warning page
-        const warningUrl = chrome.runtime.getURL('warning.html') +
-          `?url=${encodeURIComponent(details.url)}` +
-          `&reason=${encodeURIComponent(reason)}`;
-        
-        // Redirect to warning page
-        chrome.tabs.update(details.tabId, { url: warningUrl });
-      } else {
-        console.log('URL is safe'); // Debug log
-      }
-    } catch (error) {
-      console.error('Error checking URL:', error);
     }
-  }
+});
+
+// Add necessary permissions to manifest
+chrome.tabs.onUpdated.addListener(function(tabId, changeInfo, tab) {
+    if (changeInfo.status === 'loading' && tab.url) {
+        chrome.webNavigation.onBeforeNavigate.addListener(function listener(details) {
+            if (details.tabId === tabId) {
+                chrome.webNavigation.onBeforeNavigate.removeListener(listener);
+                // The URL checking will be handled by the main onBeforeNavigate listener
+            }
+        });
+    }
 });
