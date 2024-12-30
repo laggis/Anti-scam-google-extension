@@ -1,6 +1,6 @@
 // Configuration
 const CONFIG = {
-    SAFE_BROWSING_API_KEY: 'AIzaSyB6ZjzqtDIbH857nRboO2t8p0_qZIw9xi4',
+    SAFE_BROWSING_API_KEY: '',
     URLHAUS_API: 'https://urlhaus-api.abuse.ch/v1/url/',
     GITHUB_URLS: [
         'https://raw.githubusercontent.com/blocklistproject/Lists/master/fraud.txt',
